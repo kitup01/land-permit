@@ -334,12 +334,16 @@ st.write("")
 
 # ── 상세 내역 / 다운로드 ───────────────────────────
 with st.expander("🔍 상세 내역 보기"):
-    if not cur.empty:
-        st.markdown('<div class="section-title">📍 위치 보기</div>', unsafe_allow_html=True)
-        pick = st.selectbox("주소 선택", sorted(cur["주소"].unique()))
-        row = cur[cur["주소"] == pick].iloc[0]
+    detail = cur.sort_values("허가일자", ascending=False).reset_index(drop=True)
+    event = st.dataframe(detail, use_container_width=True, on_select="rerun",
+                         selection_mode="single-row", key="detail_table")
+    picked_rows = event.selection.rows if event and event.selection else []
+    if picked_rows:
+        row = detail.iloc[picked_rows[0]]
+        pick = row["주소"]
         text = f"{pick} · {row['허가일자']:%Y-%m-%d} · {row['이용목적']}"
-        st.link_button("🗺️ 카카오맵에서 열기", f"https://map.kakao.com/?q={quote(pick)}")
+        st.markdown('<div class="section-title">📍 선택한 위치</div>', unsafe_allow_html=True)
+        st.link_button("🗺️ 카카오맵에서 보기", f"https://map.kakao.com/?q={quote(pick)}")
         js_key, rest_key = kakao_keys()
         if js_key and rest_key:
             try:
@@ -353,7 +357,8 @@ with st.expander("🔍 상세 내역 보기"):
                     st.caption("주소로 위치를 찾지 못했습니다.")
         else:
             st.caption("카카오 키(Secrets)를 설정하면 여기에 지도와 말풍선이 표시됩니다.")
-    st.dataframe(cur.sort_values("허가일자", ascending=False), use_container_width=True)
+    if not picked_rows:
+        st.caption("행을 누르면 그 주소의 위치를 카카오맵에서 볼 수 있습니다.")
     st.download_button("⬇️ CSV로 내려받기",
                        cur.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
