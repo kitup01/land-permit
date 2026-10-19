@@ -178,7 +178,7 @@ with st.container(border=True):
                  .mark_bar(cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
                  .encode(
                      x=alt.X("라벨:O", sort=label_order, title=None,
-                             axis=alt.Axis(labelAngle=-45)),
+                             axis=alt.Axis(labelAngle=-45, labelOverlap=False)),
                      xOffset=alt.XOffset(f"{top_col}:N"),   # 동별 막대를 날짜 안에서 나란히 배치
                      y=alt.Y("건수:Q", title="건",
                              axis=alt.Axis(tickMinStep=1, format="d")),
