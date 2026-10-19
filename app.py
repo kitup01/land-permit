@@ -172,11 +172,13 @@ with st.container(border=True):
             names=["허가일자", top_col])
         daily = (daily.set_index(["허가일자", top_col])
                       .reindex(grid, fill_value=0).reset_index())
+        daily["라벨"] = daily["허가일자"].dt.strftime("%m-%d")   # 날짜 칸마다 눈금을 맞추기 위한 글자 라벨
+        label_order = [d.strftime("%m-%d") for d in pd.date_range(start, end)]
         chart = (alt.Chart(daily)
                  .mark_bar(cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
                  .encode(
-                     x=alt.X("허가일자:T", timeUnit="yearmonthdate", title=None,
-                             axis=alt.Axis(format="%m-%d", labelAngle=-45)),
+                     x=alt.X("라벨:O", sort=label_order, title=None,
+                             axis=alt.Axis(labelAngle=-45)),
                      xOffset=alt.XOffset(f"{top_col}:N"),   # 동별 막대를 날짜 안에서 나란히 배치
                      y=alt.Y("건수:Q", title="건",
                              axis=alt.Axis(tickMinStep=1, format="d")),
