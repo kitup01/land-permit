@@ -335,8 +335,12 @@ st.write("")
 # ── 상세 내역 / 다운로드 ───────────────────────────
 with st.expander("🔍 상세 내역 보기"):
     detail = cur.sort_values("허가일자", ascending=False).reset_index(drop=True)
-    event = st.dataframe(detail, use_container_width=True, on_select="rerun",
-                         selection_mode="single-row", key="detail_table")
+    view = detail.copy()   # 주소 칸 자체를 카카오맵 링크로 (글자는 주소 그대로 표시)
+    view["주소"] = view["주소"].map(lambda a: f"https://map.kakao.com/?q={a}")
+    event = st.dataframe(
+        view, use_container_width=True, on_select="rerun",
+        selection_mode="single-row", key="detail_table",
+        column_config={"주소": st.column_config.LinkColumn("주소", display_text=r"q=(.+)")})
     picked_rows = event.selection.rows if event and event.selection else []
     if picked_rows:
         row = detail.iloc[picked_rows[0]]
