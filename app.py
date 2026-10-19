@@ -35,6 +35,10 @@ pivot = (sub.assign(건수=1)
             .sort_index(ascending=False))
 pivot["합계"] = pivot.sum(axis=1)
 
+st.subheader("일자별 건수 그래프")
+chart_df = pivot.drop(columns="합계").sort_index()   # 날짜 오름차순, 동별로 쌓은 막대
+st.bar_chart(chart_df)
+
 st.subheader("일자별 건수")
 st.dataframe(pivot)
 
