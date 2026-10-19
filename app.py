@@ -40,9 +40,6 @@ st.markdown("""
         .kpi-value {font-size: 1.4rem;}
         .kpi-icon {width: 32px; height: 32px; font-size: 1rem;}
         .period {font-size: .8rem;}
-        div[data-testid="stVegaLiteChart"], div[data-testid="stArrowVegaLiteChart"] {
-            overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;
-        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -100,7 +97,7 @@ with st.container(border=True):
     st.markdown('<div class="section-title">🔍 조회 조건</div>', unsafe_allow_html=True)
 
     prev_gu = st.session_state.query[0] if st.session_state.query else "전체"
-    c1, c2, c3, c4 = st.columns([1, 1, 2, 1])
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 0.8])
     with c1:
         gu_sel = st.selectbox("🏙️ 자치구", GU_LIST, index=GU_LIST.index(prev_gu))
     with c2:
@@ -113,26 +110,26 @@ with st.container(border=True):
             dong_sel = st.selectbox("🏘️ 동", dong_opts,
                                     index=dong_opts.index(prev_dong)
                                     if prev_dong in dong_opts else 0)
+
+    if st.session_state.query:
+        dflt_s, dflt_e = st.session_state.query[2], st.session_state.query[3]
+    else:
+        dflt_s, dflt_e = one_month_range()   # 처음 열면 한 달 전 ~ 오늘
     with c3:
-        if st.session_state.query:
-            default_range = (st.session_state.query[2], st.session_state.query[3])
-        else:
-            default_range = one_month_range()   # 처음 열면 한 달 전 ~ 오늘
-        date_sel = st.date_input("📅 기간", value=default_range,
-                                 min_value=min_d, max_value=max_d)
+        from_sel = st.date_input("📅 시작일", value=dflt_s, min_value=min_d, max_value=max_d)
     with c4:
+        to_sel = st.date_input("📅 종료일", value=dflt_e, min_value=min_d, max_value=max_d)
+    with c5:
         st.write("")
         submitted = st.button("조회하기", type="primary", use_container_width=True)
 
     if submitted:
         if gu_sel == "전체":
             need_gu_popup()
+        elif from_sel > to_sel:
+            st.toast("시작일이 종료일보다 늦습니다.", icon="⚠️")
         else:
-            if isinstance(date_sel, (tuple, list)) and len(date_sel) == 2:
-                s, e = date_sel
-            else:
-                s = e = date_sel[0] if isinstance(date_sel, (tuple, list)) else date_sel
-            st.session_state.query = (gu_sel, dong_sel, s, e)
+            st.session_state.query = (gu_sel, dong_sel, from_sel, to_sel)
 
 if st.session_state.query is None:
     st.markdown('<div class="empty">🔎<br><br>자치구와 기간을 고른 뒤 <b>조회하기</b>를 누르면 결과가 나옵니다.</div>',
@@ -151,13 +148,9 @@ cur = base[base["허가일자"].between(start, end)]
 st.markdown(f'<div class="period">📅 {start:%Y-%m-%d} ~ {end:%Y-%m-%d} &nbsp;·&nbsp; '
             f'🏙️ {gu} &nbsp;·&nbsp; 🏘️ {dong}</div>', unsafe_allow_html=True)
 
-# ── KPI 카드 (휴대폰에서도 2x2) ───────────────────
+# ── KPI 카드 ──────────────────────────────────────
 total = len(cur)
 avg = total / days if days else 0
-
-top = cur["동"].value_counts()
-top_name = top.index[0] if len(top) else "-"
-top_cnt = int(top.iloc[0]) if len(top) else 0
 
 prev_base = df[df["구"] == gu]
 if dong != "전체":
@@ -173,20 +166,19 @@ if prev_total:
 else:
     change, change_sub, change_class = "-", "직전 기간 데이터 없음", ""
 
-k1, k2 = st.columns(2)
-k3, k4 = st.columns(2)
+k1, k2, k3 = st.columns(3)
 k1.markdown(kpi("📋", "총 허가", f"{total:,}", "건"), unsafe_allow_html=True)
-k2.markdown(kpi("🏆", "최다 동", top_name,
-                sub=f"{top_cnt:,}건" if top_cnt else "데이터 없음"),
-            unsafe_allow_html=True)
-k3.markdown(kpi("📈", "일평균", f"{avg:.1f}", "건/일"), unsafe_allow_html=True)
-k4.markdown(kpi("🔄", "직전 기간 대비", change, sub=change_sub, sub_class=change_class),
+k2.markdown(kpi("📈", "일평균", f"{avg:.1f}", "건/일"), unsafe_allow_html=True)
+k3.markdown(kpi("🔄", "직전 기간 대비", change, sub=change_sub, sub_class=change_class),
             unsafe_allow_html=True)
 
 st.write("")
 
 # ── 일별 막대그래프 ───────────────────────────────
-label_order = [d.strftime("%m-%d") for d in pd.date_range(start, end)]
+# 허가가 있었던 날짜만 가로축에 표시
+active_dates = pd.DatetimeIndex(sorted(cur["허가일자"].unique()))
+label_order = [d.strftime("%m-%d") for d in active_dates]
+
 with st.container(border=True):
     st.markdown('<div class="section-title">📊 허가 추이 (일별)</div>', unsafe_allow_html=True)
     if cur.empty:
@@ -198,10 +190,7 @@ with st.container(border=True):
 
         if dong == "전체":
             # 동을 고르지 않은 경우: 자치구 일별 합계 막대 + 기간 일평균 점선
-            daily = (cur.assign(건수=1).groupby("허가일자", as_index=False)["건수"].sum()
-                        .set_index("허가일자")
-                        .reindex(pd.date_range(start, end), fill_value=0)
-                        .rename_axis("허가일자").reset_index())
+            daily = (cur.assign(건수=1).groupby("허가일자", as_index=False)["건수"].sum())
             daily["라벨"] = daily["허가일자"].dt.strftime("%m-%d")
             bars = (alt.Chart(daily)
                     .mark_bar(color="#0d9488", cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
@@ -218,7 +207,7 @@ with st.container(border=True):
             daily = (cur.assign(건수=1)
                         .groupby(["허가일자", "동"], as_index=False)["건수"].sum())
             grid = pd.MultiIndex.from_product(
-                [pd.date_range(start, end), daily["동"].unique()],
+                [active_dates, daily["동"].unique()],
                 names=["허가일자", "동"])
             daily = (daily.set_index(["허가일자", "동"])
                           .reindex(grid, fill_value=0).reset_index())
