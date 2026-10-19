@@ -8,7 +8,7 @@ st.set_page_config(page_title="토지거래허가 현황", page_icon="🏠", lay
 
 st.markdown("""
 <style>
-    .block-container {padding-top: 2rem; max-width: 1200px;}
+    .block-container {padding-top: 5rem; max-width: 1200px;}   /* 상단 바에 가리지 않도록 여백 확보 */
     .hero {display: flex; align-items: center; gap: 14px; margin-bottom: 1.4rem;}
     .hero-icon {font-size: 2.2rem; background: linear-gradient(135deg, #14b8a6, #0d9488);
                 width: 58px; height: 58px; border-radius: 16px; display: flex;
@@ -33,7 +33,7 @@ st.markdown("""
     .empty {text-align: center; padding: 70px 20px; color: #64748b; font-size: 1rem;
             background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 16px;}
     @media (max-width: 640px) {
-        .block-container {padding: 1rem .75rem;}
+        .block-container {padding: 4.5rem .75rem 1rem;}
         .hero-title {font-size: 1.4rem;}
         .hero-icon {width: 46px; height: 46px; font-size: 1.6rem;}
         .kpi {padding: 14px 16px;}
