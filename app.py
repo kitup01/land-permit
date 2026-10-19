@@ -233,12 +233,12 @@ with st.container(border=True):
                                       alt.Tooltip("동:N"),
                                       alt.Tooltip("건수:Q", title="건수")]))
 
-        chart = (chart.properties(width=max(360, days * 34), height=320)
+        chart = (chart.properties(width="container", height=320)   # 카드 폭에 맞춰 반응형으로
                       .configure_view(strokeWidth=0)
                       .configure_axis(gridColor="#f1f5f9", labelColor="#475569",
                                       titleColor="#475569", domainColor="#cbd5e1")
                       .configure_legend(orient="top", labelColor="#334155"))
-        st.altair_chart(chart, use_container_width=False)   # 고정 폭: 휴대폰에서는 옆으로 밀어서 봄
+        st.altair_chart(chart, use_container_width=True)
 
 st.write("")
 
