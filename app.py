@@ -1,13 +1,8 @@
 import altair as alt
-import html
-import threading
 import pandas as pd
-import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from datetime import date
 from pathlib import Path
-from urllib.parse import quote
 
 st.set_page_config(page_title="토지거래허가 현황", page_icon="🏠", layout="wide")
 
@@ -74,72 +69,6 @@ def kpi(icon, label, value, unit="", sub="", sub_class=""):
             f'<div class="kpi-icon">{icon}</div></div>'
             f'<div class="kpi-value">{value}<span class="kpi-unit">{unit}</span></div>'
             f'<div class="kpi-sub {sub_class}">{sub}</div></div>')
-
-
-def kakao_keys():
-    """Streamlit Secrets에서 카카오 키를 읽음 (설정이 없으면 None)"""
-    try:
-        return st.secrets.get("KAKAO_JS_KEY"), st.secrets.get("KAKAO_REST_KEY")
-    except Exception:
-        return None, None
-
-
-DAILY_KAKAO_LIMIT = 10_000   # 하루 좌표 조회 최대 건수
-
-
-class KakaoLimitReached(Exception):
-    pass
-
-
-@st.cache_resource
-def kakao_counter():
-    return {"date": None, "count": 0, "lock": threading.Lock()}
-
-
-def take_kakao_call():
-    """오늘 좌표 조회 횟수를 1 올리고, 한도 안이면 True 반환"""
-    c = kakao_counter()
-    today = date.today()
-    with c["lock"]:
-        if c["date"] != today:          # 날짜가 바뀌면 0부터 다시 셈
-            c["date"], c["count"] = today, 0
-        if c["count"] >= DAILY_KAKAO_LIMIT:
-            return False
-        c["count"] += 1
-        return True
-
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def geocode(address, rest_key):
-    """지번 주소 → (위도, 경도). 카카오 로컬 API 사용 (같은 주소는 하루 한 번만 호출)"""
-    if not take_kakao_call():
-        raise KakaoLimitReached()
-    r = requests.get("https://dapi.kakao.com/v2/local/search/address.json",
-                     params={"query": f"서울특별시 {address}"},
-                     headers={"Authorization": f"KakaoAK {rest_key}"}, timeout=10)
-    r.raise_for_status()
-    docs = r.json().get("documents", [])
-    if not docs:
-        return None
-    return float(docs[0]["y"]), float(docs[0]["x"])
-
-
-def kakao_map_html(js_key, lat, lng, text):
-    """말풍선(커스텀 오버레이)이 붙은 작은 카카오 지도"""
-    bubble = html.escape(text)
-    return f"""
-<div id="map" style="width:100%;height:240px;border-radius:12px;overflow:hidden;"></div>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey={js_key}&autoload=false"></script>
-<script>
-kakao.maps.load(function () {{
-  var pos = new kakao.maps.LatLng({lat}, {lng});
-  var map = new kakao.maps.Map(document.getElementById('map'), {{ center: pos, level: 4 }});
-  new kakao.maps.Marker({{ position: pos }}).setMap(map);
-  var content = '<div style="padding:6px 10px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#0f172a;box-shadow:0 2px 6px rgba(0,0,0,.15);white-space:nowrap;">{bubble}</div>';
-  new kakao.maps.CustomOverlay({{ position: pos, content: content, yAnchor: 2.4 }}).setMap(map);
-}});
-</script>
-"""
 
 
 @st.dialog("알림")
@@ -335,34 +264,12 @@ st.write("")
 # ── 상세 내역 / 다운로드 ───────────────────────────
 with st.expander("🔍 상세 내역 보기"):
     detail = cur.sort_values("허가일자", ascending=False).reset_index(drop=True)
-    view = detail.copy()   # 주소 칸 자체를 카카오맵 링크로 (글자는 주소 그대로 표시)
-    view["주소"] = view["주소"].map(lambda a: f"https://map.kakao.com/?q={a}")
-    event = st.dataframe(
-        view, use_container_width=True, on_select="rerun",
-        selection_mode="single-row", key="detail_table",
-        column_config={"주소": st.column_config.LinkColumn("주소", display_text=r"q=(.+)")})
-    picked_rows = event.selection.rows if event and event.selection else []
-    if picked_rows:
-        row = detail.iloc[picked_rows[0]]
-        pick = row["주소"]
-        text = f"{pick} · {row['허가일자']:%Y-%m-%d} · {row['이용목적']}"
-        st.markdown('<div class="section-title">📍 선택한 위치</div>', unsafe_allow_html=True)
-        st.link_button("🗺️ 카카오맵에서 보기", f"https://map.kakao.com/?q={quote(pick)}")
-        js_key, rest_key = kakao_keys()
-        if js_key and rest_key:
-            try:
-                coords = geocode(pick, rest_key)
-            except KakaoLimitReached:
-                st.caption("오늘 카카오 좌표 조회 한도(1만 건)에 도달해 지도를 표시하지 못했습니다. 내일 다시 시도해 주세요.")
-            else:
-                if coords:
-                    components.html(kakao_map_html(js_key, coords[0], coords[1], text), height=260)
-                else:
-                    st.caption("주소로 위치를 찾지 못했습니다.")
-        else:
-            st.caption("카카오 키(Secrets)를 설정하면 여기에 지도와 말풍선이 표시됩니다.")
-    if not picked_rows:
-        st.caption("행을 누르면 그 주소의 위치를 카카오맵에서 볼 수 있습니다.")
+    view = detail.copy()
+    # 주소 칸 자체가 네이버지도 검색 링크 (글자는 주소 그대로 표시)
+    view["주소"] = view["주소"].map(lambda a: f"https://map.naver.com/v5/search/{a}")
+    st.dataframe(
+        view, use_container_width=True,
+        column_config={"주소": st.column_config.LinkColumn("주소", display_text=r"search/(.+)")})
     st.download_button("⬇️ CSV로 내려받기",
                        cur.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
