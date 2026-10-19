@@ -166,11 +166,18 @@ with st.container(border=True):
     else:
         daily = (cur.assign(건수=1)
                     .groupby(["허가일자", top_col], as_index=False)["건수"].sum())
+        # 허가가 없는 날도 0으로 채워서 선이 0에서 끊기지 않게 함
+        grid = pd.MultiIndex.from_product(
+            [pd.date_range(start, end), daily[top_col].unique()],
+            names=["허가일자", top_col])
+        daily = (daily.set_index(["허가일자", top_col])
+                      .reindex(grid, fill_value=0).reset_index())
         chart = (alt.Chart(daily)
-                 .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+                 .mark_line(point=True, strokeDash=[6, 4], strokeWidth=2)
                  .encode(
                      x=alt.X("허가일자:T", title=None,
                              axis=alt.Axis(format="%m-%d", labelAngle=-45)),
+                     xOffset=alt.XOffset(f"{top_col}:N"),   # 동별 막대를 나란히 배치
                      y=alt.Y("건수:Q", title="건",
                              axis=alt.Axis(tickMinStep=1, format="d")),
                      color=alt.Color(f"{top_col}:N", title=None,
