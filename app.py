@@ -173,11 +173,11 @@ with st.container(border=True):
         daily = (daily.set_index(["허가일자", top_col])
                       .reindex(grid, fill_value=0).reset_index())
         chart = (alt.Chart(daily)
-                 .mark_line(point=True, strokeDash=[6, 4], strokeWidth=2)
+                 .mark_bar(cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
                  .encode(
-                     x=alt.X("허가일자:T", title=None,
+                     x=alt.X("허가일자:T", timeUnit="yearmonthdate", title=None,
                              axis=alt.Axis(format="%m-%d", labelAngle=-45)),
-                     xOffset=alt.XOffset(f"{top_col}:N"),   # 동별 막대를 나란히 배치
+                     xOffset=alt.XOffset(f"{top_col}:N"),   # 동별 막대를 날짜 안에서 나란히 배치
                      y=alt.Y("건수:Q", title="건",
                              axis=alt.Axis(tickMinStep=1, format="d")),
                      color=alt.Color(f"{top_col}:N", title=None,
