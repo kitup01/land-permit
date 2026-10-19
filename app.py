@@ -32,6 +32,14 @@ st.markdown("""
     .section-title {font-weight: 700; color: #0f172a; font-size: 1.05rem; margin-bottom: .3rem;}
     .empty {text-align: center; padding: 70px 20px; color: #64748b; font-size: 1rem;
             background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 16px;}
+    @media (max-width: 640px) {
+        .block-container {padding: 1rem .75rem;}
+        .hero-title {font-size: 1.4rem;}
+        .hero-icon {width: 46px; height: 46px; font-size: 1.6rem;}
+        .kpi {padding: 14px 16px;}
+        .kpi-value {font-size: 1.4rem;}
+        .period {font-size: .8rem;}
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -119,6 +127,11 @@ start, end = pd.Timestamp(s), pd.Timestamp(e)
 days = (end - start).days + 1
 
 base = df if gu == "전체" else df[df["구"] == gu]
+if gu != "전체":
+    # 구를 고른 경우 동을 골라서 그래프와 표를 볼 수 있음
+    dong_opts = sorted(base["동"].unique())
+    picked = st.multiselect("🏘️ 동 선택", dong_opts, default=dong_opts)
+    base = base[base["동"].isin(picked)]
 cur = base[base["허가일자"].between(start, end)]
 
 st.markdown(f'<div class="period">📅 {start:%Y-%m-%d} ~ {end:%Y-%m-%d} &nbsp;·&nbsp; '
@@ -187,7 +200,7 @@ with st.container(border=True):
                      tooltip=[alt.Tooltip("허가일자:T", format="%Y-%m-%d", title="일자"),
                               alt.Tooltip(f"{top_col}:N", title=top_col),
                               alt.Tooltip("건수:Q", title="건수")])
-                 .properties(height=380)
+                 .properties(height=320)
                  .configure_view(strokeWidth=0)
                  .configure_axis(gridColor="#f1f5f9", labelColor="#475569",
                                  titleColor="#475569", domainColor="#cbd5e1")
