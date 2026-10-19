@@ -233,7 +233,7 @@ with st.container(border=True):
                                       alt.Tooltip("동:N"),
                                       alt.Tooltip("건수:Q", title="건수")]))
 
-        chart = (chart.properties(width=max(360, days * 26), height=320)
+        chart = (chart.properties(width=max(360, days * 34), height=320)
                       .configure_view(strokeWidth=0)
                       .configure_axis(gridColor="#f1f5f9", labelColor="#475569",
                                       titleColor="#475569", domainColor="#cbd5e1")
