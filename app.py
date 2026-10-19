@@ -20,31 +20,67 @@ def load():
 
 
 df = load()
-latest = df["허가일자"].max()          # 데이터의 가장 최근 허가일을 기준일로 사용
-PERIODS = {"1주": 7, "1개월": 30, "전체": None}
+min_d = df["허가일자"].min().date()
+max_d = df["허가일자"].max().date()
+GU_LIST = ["전체"] + sorted(df["구"].unique())
 
-# ── 필터 ──────────────────────────────────────────
-c1, c2 = st.columns([1, 2])
-with c1:
-    gu = st.selectbox("자치구", ["전체"] + sorted(df["구"].unique()))
-with c2:
-    period = st.radio("기간", list(PERIODS), index=1, horizontal=True)
+
+def one_month_range():
+    """오늘 날짜 기준 한 달 전부터 오늘까지"""
+    today = pd.Timestamp.today().normalize()
+    return (today - pd.DateOffset(months=1)).date(), today.date()
+
+
+# ── 조회 조건 (조회 버튼을 눌러야 적용) ─────────────
+if "query" not in st.session_state:
+    # 처음 열었을 때 기본값: 전체, 1개월
+    st.session_state.query = ("전체", *one_month_range())
+
+mode = st.radio("기간 방식", ["1개월", "직접 선택"], horizontal=True)
+is_month = mode == "1개월"
+
+with st.form("query_form"):
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c1:
+        gu_sel = st.selectbox("자치구", GU_LIST,
+                              index=GU_LIST.index(st.session_state.query[0]))
+    with c2:
+        if is_month:
+            m_start, m_end = one_month_range()
+            st.date_input("기간 (오늘 기준 1개월)", value=(m_start, m_end),
+                          disabled=True)
+            date_sel = (m_start, m_end)
+        else:
+            date_sel = st.date_input(
+                "기간 (직접 선택)",
+                value=(st.session_state.query[1], st.session_state.query[2]),
+                min_value=min_d, max_value=max_d)
+    with c3:
+        st.write("")
+        submitted = st.form_submit_button("조회", type="primary",
+                                          use_container_width=True)
+
+    if submitted:
+        if isinstance(date_sel, (tuple, list)) and len(date_sel) == 2:
+            s, e = date_sel
+        else:
+            # 날짜를 하나만 고른 경우 하루 기간으로 처리
+            s = e = date_sel[0] if isinstance(date_sel, (tuple, list)) else date_sel
+        st.session_state.query = (gu_sel, s, e)
+
+gu, s, e = st.session_state.query
+start, end = pd.Timestamp(s), pd.Timestamp(e)
+days = (end - start).days + 1
 
 base = df if gu == "전체" else df[df["구"] == gu]
-days = PERIODS[period]
-if days is None:
-    start = df["허가일자"].min()
-else:
-    start = latest - pd.Timedelta(days=days - 1)
-cur = base[base["허가일자"].between(start, latest)]
+cur = base[base["허가일자"].between(start, end)]
 
-st.caption(f"기간 {start:%Y-%m-%d} ~ {latest:%Y-%m-%d} · 단위: 건 · "
-           "토지거래허가 건수(자치구청) · 원본: 서울 토지거래허가 내역 조회")
+st.caption(f"기간 {start:%Y-%m-%d} ~ {end:%Y-%m-%d} · 자치구 {gu} · 단위: 건 · "
+           "토지거래허가 건수 (자치구청 기준)")
 
 # ── KPI 카드 ──────────────────────────────────────
 total = len(cur)
-span = (latest - start).days + 1
-avg = total / span if span else 0
+avg = total / days if days else 0
 
 if gu == "전체":
     top_label, top_col = "최다 자치구", "구"
@@ -54,15 +90,12 @@ top = cur[top_col].value_counts()
 top_name = top.index[0] if len(top) else "-"
 top_cnt = int(top.iloc[0]) if len(top) else 0
 
-if days is not None:
-    prev = base[base["허가일자"].between(start - pd.Timedelta(days=days),
-                                      start - pd.Timedelta(days=1))]
-    prev_total = len(prev)
-    diff = total - prev_total
-    change = f"{diff / prev_total * 100:+.1f}%" if prev_total else "-"
-    change_delta = f"{diff:+,}건"
-else:
-    change, change_delta = "-", None
+prev = base[base["허가일자"].between(start - pd.Timedelta(days=days),
+                                  start - pd.Timedelta(days=1))]
+prev_total = len(prev)
+diff = total - prev_total
+change = f"{diff / prev_total * 100:+.1f}%" if prev_total else "-"
+change_delta = f"{diff:+,}건" if prev_total else None
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("총 허가", f"{total:,}건")
