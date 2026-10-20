@@ -174,17 +174,14 @@ def show_trades(title, addr, gu, dong, jibun):
     t["억"] = t["거래금액"] / 10000
     # 평형별 대표 전용면적 (사이트 자료는 전용면적 기준이라 아실 평형과 다를 수 있음)
     area_by = t.groupby("평형")["전용면적"].agg(lambda s: int(round(s.mode().iloc[0])))
-    t["평형라벨"] = [f"{p}평" for p in t["평형"]]
-    labels = [f"{p}평" for p in sorted(area_by.index)]
+    t["평형라벨"] = [f"{p}평 (전용 {area_by[p]}㎡)" for p in t["평형"]]
+    labels = [f"{p}평 (전용 {area_by[p]}㎡)" for p in sorted(area_by.index)]
     t_all = t.copy()   # 기간 슬라이더는 평형 선택과 무관하게 단지 전체 기간 기준
 
     # 평형 선택: '전체'가 기본. 전체를 누르면 나머지는 풀리고, 평형을 누르면 전체는 풀림
     pyeong_key = f"pyeong_{gu}_{jibun}"
     chosen = st.pills("평형", ["전체"] + labels, selection_mode="multi", default=["전체"],
                       key=pyeong_key, on_change=_pyeong_changed, args=(pyeong_key,))
-    area_txt = " · ".join(f"{p}평 전용 {area_by[p]}㎡" for p in sorted(area_by.index))
-    st.markdown(f'<div style="font-size:.72rem;color:#94a3b8;margin:-.3rem 0 .4rem">{area_txt}</div>',
-                unsafe_allow_html=True)
     if not chosen:
         chosen = ["전체"]
     if "전체" not in chosen:
