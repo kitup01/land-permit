@@ -147,17 +147,20 @@ def main():
     for gu, code in targets.items():
         gu_rows = []
         failed = []
+        ok_months = []
         print(f"[{gu}]")
         for ym in months:
             rows = fetch_month(session, key, code, ym)
             if rows is None:
                 failed.append(ym)
-                print(f"  {ym}: 실패 (건너뜀)")
+                print(f"  {ym}: 실패 (기존 데이터 유지)")
             else:
                 gu_rows += rows
+                ok_months.append(ym)
                 print(f"  {ym}: {len(rows)}건")
             time.sleep(MONTH_PAUSE)
-        total = save_gu(to_frame(gu_rows, gu), gu, months)
+        # 성공한 달만 교체: 실패한 달의 기존 데이터는 지우지 않음
+        total = save_gu(to_frame(gu_rows, gu), gu, ok_months)
         print(f"  -> 저장 누적 {total}건" + (f", 실패 월: {failed}" if failed else ""))
     print(f"완료: {OUT}")
 
