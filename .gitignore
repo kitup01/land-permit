@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 *.tmp.csv
+한국부동산원_공동주택*.csv

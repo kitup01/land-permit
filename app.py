@@ -65,6 +65,18 @@ def load():
     return df
 
 
+APT_CSV = Path(__file__).parent / "apartment_names.csv"
+
+
+@st.cache_data(ttl=86400)
+def load_apartments():
+    """지번 주소 → 아파트명 (아파트가 아닌 지번은 없음). build_apartment_map.py로 생성"""
+    if not APT_CSV.exists():
+        return {}
+    m = pd.read_csv(APT_CSV, dtype=str, encoding="utf-8-sig")
+    return dict(zip(m["주소"], m["아파트명"]))
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def sgg_codes():
     return {nm: cd for cd, nm in collect.get_districts()}
@@ -303,6 +315,9 @@ st.write("")
 # ── 상세 내역 / 다운로드 ───────────────────────────
 with st.expander("🔍 상세 내역 보기"):
     detail = cur.sort_values("허가일자", ascending=False).reset_index(drop=True)
+    apt_map = load_apartments()
+    apt_names = ("서울특별시 " + detail["주소"].str.strip()).map(apt_map).fillna("")
+    detail.insert(detail.columns.get_loc("주소") + 1, "아파트명", apt_names)   # 주소 오른쪽에 표시
     view = detail.copy()
     # 주소 칸 자체가 네이버지도 검색 링크 (글자는 주소 그대로 표시)
     view["주소"] = view["주소"].map(lambda a: f"https://map.naver.com/v5/search/{a}")
@@ -310,5 +325,5 @@ with st.expander("🔍 상세 내역 보기"):
         view, width="stretch",
         column_config={"주소": st.column_config.LinkColumn("주소", display_text=r"search/(.+)")})
     st.download_button("⬇️ CSV로 내려받기",
-                       cur.to_csv(index=False).encode("utf-8-sig"),
+                       detail.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
