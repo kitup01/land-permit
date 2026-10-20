@@ -69,16 +69,17 @@ def load():
 APT_CSV = Path(__file__).parent / "apartment_names.csv"
 
 
-@st.cache_data(ttl=86400)
+@st.cache_resource
 def load_apartment_info():
-    """지번 주소 → 세대 수·사용승인 연도 (단지 식별정보 기반)"""
+    """지번 주소 → (세대 수, 사용승인 연도) (단지 식별정보 기반). 튜플로 가볍게 보관"""
     if not APT_CSV.exists():
         return {}
     m = pd.read_csv(APT_CSV, dtype=str, encoding="utf-8-sig")
-    return {r["주소"]: r for _, r in m.iterrows()}
+    # 열 순서: 주소, 아파트명, 세대수, 사용승인연도
+    return {r[0]: (r[2], r[3]) for r in m.itertuples(index=False)}
 
 
-@st.cache_data(ttl=86400)
+@st.cache_resource
 def load_apartments():
     """지번 주소 → 아파트명 (아파트가 아닌 지번은 없음). build_apartment_map.py로 생성"""
     if not APT_CSV.exists():
@@ -140,7 +141,7 @@ def load_trades():
     return _load_trades_file(TRADE_CSV.stat().st_mtime)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource
 def _load_trades_file(_mtime):
     t = pd.read_csv(TRADE_CSV, dtype=str, encoding="utf-8-sig")
     t["계약일"] = pd.to_datetime(t["계약일"], errors="coerce")
@@ -176,7 +177,7 @@ def show_trades(title, addr, gu, dong, jibun):
         f'<div style="font-size:.85rem;color:#64748b;margin-bottom:.6rem">{addr}</div>',
         unsafe_allow_html=True)
     # 단지 기본 정보 카드 (연식·세대수는 단지 식별정보, 주차·용적률은 건축물대장 신청 후 표시)
-    info = load_apartment_info().get("서울특별시 " + addr)
+    info = load_apartment_info().get("서울특별시 " + addr)   # (세대 수, 사용승인 연도) 또는 None
 
     def mini(label, value, sub=""):
         return (f'<div style="border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px;background:#fff">'
@@ -184,8 +185,8 @@ def show_trades(title, addr, gu, dong, jibun):
                 f'<div style="font-size:1.02rem;font-weight:800;color:#0f172a;margin-top:2px">{value}</div>'
                 f'<div style="font-size:.7rem;color:#94a3b8">{sub}</div></div>')
 
-    year = info["사용승인연도"] if info is not None and pd.notna(info["사용승인연도"]) else ""
-    households = info["세대수"] if info is not None and pd.notna(info["세대수"]) else ""
+    households = info[0] if info is not None and pd.notna(info[0]) else ""
+    year = info[1] if info is not None and pd.notna(info[1]) else ""
     year_txt = f"{int(float(year))}년" if year else "-"
     age_txt = f"연식 {date.today().year - int(float(year))}년" if year else ""
     hh_txt = f"{int(float(households)):,}세대" if households else "-"
@@ -293,7 +294,7 @@ def trade_trends():
     return _trade_trends_file(TRADE_CSV.stat().st_mtime)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource
 def _trade_trends_file(_mtime):
     t = load_trades()
     if t is None:
