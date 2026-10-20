@@ -544,7 +544,7 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
     # 매물 칸을 누르면 네이버부동산 검색 (단지명이 있으면 단지명, 없으면 주소로 검색)
     # 검색어: 아파트면 "동 + 단지명" (예: 장안동 장안현대홈타운), 아니면 "구 + 동 + 지번"
     view.insert(view.columns.get_loc("지도") + 1, "매물", [
-        f"https://m.land.naver.com/search/result/{quote(f'{dg} {name}' if name else f'{gu} {dg} {jibun_of(addr)}')}#매물보기"
+        f"https://m.land.naver.com/search/result/{quote(name if name else f'{gu} {dg} {jibun_of(addr)}')}#매물보기"
         for gu, dg, name, addr in zip(detail["구"], detail["동"], detail["아파트명"], detail["주소"])])
     st.caption("👆 파란 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다 · 추세: ▲ 직전 거래보다 상승, ▼ 하락 (같은 지번·전용면적 기준)")
     # 아파트명은 링크처럼 파란 밑줄로 표시 (누르면 실거래 그래프)
