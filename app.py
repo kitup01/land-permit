@@ -1,8 +1,10 @@
 import altair as alt
 import pandas as pd
 import streamlit as st
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
+
+import collect  # 같은 폴더의 수집 코드 재사용 (사이트 요청 방식 동일)
 
 st.set_page_config(page_title="토지거래허가 현황", page_icon="🏠", layout="wide")
 
@@ -45,10 +47,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 CSV = Path(__file__).parent / "permits.csv"
+PLACEHOLDER_GU = "자치구 선택"
 
 if not CSV.exists():
     st.error("permits.csv 파일이 없습니다. 먼저 데이터 파일을 넣어주세요.")
     st.stop()
+
+
+class FetchFailed(Exception):
+    pass
 
 
 @st.cache_data(ttl=600)
@@ -56,6 +63,27 @@ def load():
     df = pd.read_csv(CSV, dtype=str)
     df["허가일자"] = pd.to_datetime(df["허가일자"])
     return df
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def sgg_codes():
+    return {nm: cd for cd, nm in collect.get_districts()}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_live(gu, begin, end):
+    """저장 데이터 이후 기간을 사이트에서 가져옴 (같은 조회는 1시간 동안 재요청하지 않음)"""
+    code = sgg_codes()[gu]
+    rows = []
+    cur = begin
+    while cur <= end:
+        chunk_end = min(cur + timedelta(days=collect.DAYS), end)
+        items = collect.get_contracts(code, cur.strftime("%Y%m%d"), chunk_end.strftime("%Y%m%d"))
+        if any("MESSAGE" in x for x in items):
+            raise FetchFailed()   # 예외는 캐시되지 않으므로 다음 조회 때 다시 시도됨
+        rows += collect.to_rows(items, gu)
+        cur = chunk_end + timedelta(days=1)
+    return rows
 
 
 def one_month_range():
@@ -74,15 +102,15 @@ def kpi(icon, label, value, unit="", sub="", sub_class=""):
 @st.dialog("알림")
 def need_gu_popup():
     st.write("**자치구를 선택해주세요.**")
-    st.caption("'전체'는 조회할 수 없습니다. 자치구를 고른 뒤 다시 조회해 주세요.")
-    if st.button("확인", type="primary", use_container_width=True):
+    st.caption("자치구를 고른 뒤 다시 조회해 주세요.")
+    if st.button("확인", type="primary", width="stretch"):
         st.rerun()
 
 
 df = load()
 min_d = df["허가일자"].min().date()
 max_d = max(df["허가일자"].max().date(), date.today())
-GU_LIST = ["전체"] + sorted(df["구"].unique())
+GU_OPTIONS = [PLACEHOLDER_GU] + sorted(df["구"].unique())
 
 st.markdown('<div class="hero"><div class="hero-icon">🏠</div><div>'
             '<div class="hero-title">토지거래허가 현황</div>'
@@ -91,40 +119,34 @@ st.markdown('<div class="hero"><div class="hero-icon">🏠</div><div>'
 
 if "query" not in st.session_state:
     st.session_state.query = None  # 조회 버튼을 누르기 전에는 결과를 보여주지 않음
+# 기간 기본값은 처음 한 번만 넣음 (값이 바뀌면 위젯이 초기화되므로 key로 관리)
+st.session_state.setdefault("from_date", one_month_range()[0])
+st.session_state.setdefault("to_date", one_month_range()[1])
 
 # ── 조회 조건 ─────────────────────────────────────
 with st.container(border=True):
     st.markdown('<div class="section-title">🔍 조회 조건</div>', unsafe_allow_html=True)
 
-    prev_gu = st.session_state.query[0] if st.session_state.query else "전체"
     c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 0.8])
     with c1:
-        gu_sel = st.selectbox("🏙️ 자치구", GU_LIST, index=GU_LIST.index(prev_gu))
+        gu_sel = st.selectbox("🏙️ 자치구", GU_OPTIONS, key="gu_sel")
     with c2:
-        if gu_sel == "전체":
-            dong_sel = st.selectbox("🏘️ 동", ["전체"], disabled=True)
+        if gu_sel == PLACEHOLDER_GU:
+            st.selectbox("🏘️ 동", ["전체"], disabled=True, key="dong_off")
+            dong_sel = "전체"
         else:
             dong_opts = ["전체"] + sorted(df.loc[df["구"] == gu_sel, "동"].unique())
-            prev_dong = (st.session_state.query[1]
-                         if st.session_state.query and prev_gu == gu_sel else "전체")
-            dong_sel = st.selectbox("🏘️ 동", dong_opts,
-                                    index=dong_opts.index(prev_dong)
-                                    if prev_dong in dong_opts else 0)
-
-    if st.session_state.query:
-        dflt_s, dflt_e = st.session_state.query[2], st.session_state.query[3]
-    else:
-        dflt_s, dflt_e = one_month_range()   # 처음 열면 한 달 전 ~ 오늘
+            dong_sel = st.selectbox("🏘️ 동", dong_opts, key=f"dong_{gu_sel}")
     with c3:
-        from_sel = st.date_input("📅 시작일", value=dflt_s, min_value=min_d, max_value=max_d)
+        from_sel = st.date_input("📅 시작일", min_value=min_d, max_value=max_d, key="from_date")
     with c4:
-        to_sel = st.date_input("📅 종료일", value=dflt_e, min_value=min_d, max_value=max_d)
+        to_sel = st.date_input("📅 종료일", min_value=min_d, max_value=max_d, key="to_date")
     with c5:
         st.write("")
-        submitted = st.button("조회하기", type="primary", use_container_width=True)
+        submitted = st.button("조회하기", type="primary", width="stretch")
 
     if submitted:
-        if gu_sel == "전체":
+        if gu_sel == PLACEHOLDER_GU:
             need_gu_popup()
         elif from_sel > to_sel:
             st.toast("시작일이 종료일보다 늦습니다.", icon="⚠️")
@@ -139,6 +161,23 @@ if st.session_state.query is None:
 gu, dong, s, e = st.session_state.query
 start, end = pd.Timestamp(s), pd.Timestamp(e)
 days = (end - start).days + 1
+
+# ── 저장 데이터에 없는 최신 기간은 사이트에서 가져와 합치기 ──────────
+today_ts = pd.Timestamp(date.today())
+gu_latest = df.loc[df["구"] == gu, "허가일자"].max()
+need_from = start if pd.isna(gu_latest) else max(start, gu_latest + pd.Timedelta(days=1))
+fetch_end = min(end, today_ts)
+if need_from <= fetch_end:
+    try:
+        with st.spinner("저장되지 않은 최신 데이터를 사이트에서 가져오는 중..."):
+            live_rows = fetch_live(gu, need_from.date(), fetch_end.date())
+        live = pd.DataFrame(live_rows, columns=collect.COLUMNS).astype(str)
+        live["허가일자"] = pd.to_datetime(live["허가일자"])
+        keep = ~((df["구"] == gu) & (df["허가일자"] >= need_from) & (df["허가일자"] <= fetch_end))
+        df = pd.concat([df[keep], live], ignore_index=True)
+        df = df.drop_duplicates(subset=["접수번호", "주소", "허가일자"], keep="last")
+    except FetchFailed:
+        st.warning("사이트에서 최신 데이터를 가져오지 못했습니다(점검 중일 수 있음). 저장된 데이터만 표시합니다.")
 
 base = df[df["구"] == gu]
 if dong != "전체":
@@ -227,7 +266,7 @@ with st.container(border=True):
                       .configure_axis(gridColor="#f1f5f9", labelColor="#475569",
                                       titleColor="#475569", domainColor="#cbd5e1")
                       .configure_legend(orient="top", labelColor="#334155"))
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, width="stretch")
 
 st.write("")
 
@@ -250,7 +289,7 @@ with st.container(border=True):
 
         st.dataframe(
             pv,
-            use_container_width=True,
+            width="stretch",
             height=min(460, 40 + 35 * len(pv)),
             column_config={
                 "합계": st.column_config.ProgressColumn(
@@ -268,7 +307,7 @@ with st.expander("🔍 상세 내역 보기"):
     # 주소 칸 자체가 네이버지도 검색 링크 (글자는 주소 그대로 표시)
     view["주소"] = view["주소"].map(lambda a: f"https://map.naver.com/v5/search/{a}")
     st.dataframe(
-        view, use_container_width=True,
+        view, width="stretch",
         column_config={"주소": st.column_config.LinkColumn("주소", display_text=r"search/(.+)")})
     st.download_button("⬇️ CSV로 내려받기",
                        cur.to_csv(index=False).encode("utf-8-sig"),
