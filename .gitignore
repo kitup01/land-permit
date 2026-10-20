@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 *.tmp.csv
 한국부동산원_공동주택*.csv
+.streamlit/secrets.toml

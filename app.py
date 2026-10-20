@@ -139,9 +139,12 @@ def load_trades():
 
 
 @st.dialog("실거래 추이", width="large")
-def show_trades(title, gu, dong, jibun):
-    """아파트 실거래 그래프 (평형별 색). 지번 기준으로 거래를 모음"""
-    st.markdown(f"**{title}**")
+def show_trades(title, addr, gu, dong, jibun):
+    """아파트 실거래 팝업 (아실 스타일). 지번 기준 거래, 평형별 색·선택"""
+    st.markdown(
+        f'<div style="font-size:1.25rem;font-weight:800;color:#0f172a">{title}</div>'
+        f'<div style="font-size:.85rem;color:#64748b;margin-bottom:.6rem">{addr}</div>',
+        unsafe_allow_html=True)
     trades = load_trades()
     if trades is None:
         st.info("실거래 데이터가 아직 없습니다. collect_trades.py를 실행해 주세요.")
@@ -151,26 +154,75 @@ def show_trades(title, gu, dong, jibun):
         st.info("이 지번의 실거래 자료가 없습니다.")
         return
     t["평형라벨"] = t["평형"].astype(int).astype(str) + "평"
-    order = [f"{p}평" for p in sorted(t["평형"].astype(int).unique())]
-    chart = (alt.Chart(t)
-             .mark_circle(size=90, opacity=0.8)
-             .encode(
-                 x=alt.X("계약일:T", title=None, axis=alt.Axis(format="%y.%m", labelAngle=-45)),
-                 y=alt.Y("거래금액:Q", title="거래금액 (만원)", scale=alt.Scale(zero=False),
-                         axis=alt.Axis(format=",.0f")),
-                 color=alt.Color("평형라벨:N", title="평형", sort=order,
-                                 scale=alt.Scale(scheme="tableau10")),
-                 tooltip=[alt.Tooltip("계약일:T", format="%Y-%m-%d", title="계약일"),
-                          alt.Tooltip("단지명:N", title="단지"),
-                          alt.Tooltip("평형라벨:N", title="평형"),
-                          alt.Tooltip("층:Q", title="층"),
-                          alt.Tooltip("거래금액:Q", title="거래금액(만원)", format=",.0f")])
-             .properties(width="container", height=300)
+    t["억"] = t["거래금액"] / 10000
+    labels = [f"{p}평" for p in sorted(t["평형"].astype(int).unique())]
+
+    # 평형 선택 (아실의 '평수' 버튼 역할: 여러 개 선택 가능, 색은 평형별로 고정)
+    chosen = st.pills("평형", labels, selection_mode="multi", default=labels,
+                      key=f"pyeong_{gu}_{jibun}")
+    if not chosen:
+        st.info("평형을 하나 이상 선택해 주세요.")
+        return
+    t = t[t["평형라벨"].isin(chosen)]
+
+    # 기간 슬라이더 (기본: 최근 3년)
+    dmin, dmax = t["계약일"].min().date(), t["계약일"].max().date()
+    default_start = max(dmin, dmax - timedelta(days=365 * 3))
+    span = st.slider("기간", min_value=dmin, max_value=dmax, value=(default_start, dmax),
+                     key=f"range_{gu}_{jibun}")
+    t = t[(t["계약일"] >= pd.Timestamp(span[0])) & (t["계약일"] <= pd.Timestamp(span[1]))]
+    if t.empty:
+        st.info("선택한 기간에 거래가 없습니다.")
+        return
+
+    # 최근 거래월 요약 (아실의 '06년 12월 / 매매 50,325 / 2건')
+    last_month = t["계약일"].max().to_period("M")
+    recent = t[t["계약일"].dt.to_period("M") == last_month]
+    st.markdown(
+        f'<div style="margin:.4rem 0 .2rem;font-size:.9rem;color:#334155">{last_month.year % 100:02d}년 {last_month.month:02d}월</div>'
+        f'<div style="font-size:1.15rem;font-weight:800;color:#2563eb">매매 {recent["거래금액"].mean():,.0f} / {len(recent)}건</div>',
+        unsafe_allow_html=True)
+
+    color = alt.Color("평형라벨:N", title=None, sort=labels, scale=alt.Scale(scheme="tableau10"))
+    y_axis = alt.Axis(labelExpr="format(datum.value, '.0f') + '억'", titleColor="#475569")
+
+    # 위: 평형별 매매 선 + 점
+    line = (alt.Chart(t)
+            .mark_line(point=alt.OverlayMarkDef(size=45, filled=True), strokeWidth=1.6, opacity=0.9)
+            .encode(
+                x=alt.X("계약일:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
+                y=alt.Y("억:Q", title=None, scale=alt.Scale(zero=False), axis=y_axis),
+                color=color,
+                order="계약일:T",
+                tooltip=[alt.Tooltip("계약일:T", format="%Y-%m-%d", title="계약일"),
+                         alt.Tooltip("단지명:N", title="단지"),
+                         alt.Tooltip("평형라벨:N", title="평형"),
+                         alt.Tooltip("층:Q", title="층"),
+                         alt.Tooltip("거래금액:Q", title="거래금액(만원)", format=",.0f")])
+            .properties(height=280, width="container"))
+
+    # 아래: 월별 거래 건수 막대 (평형별 색)
+    monthly = (t.assign(월=t["계약일"].dt.to_period("M").dt.to_timestamp())
+                .groupby(["월", "평형라벨"], as_index=False).size()
+                .rename(columns={"size": "건수"}))
+    bars = (alt.Chart(monthly)
+            .mark_bar()
+            .encode(
+                x=alt.X("월:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
+                y=alt.Y("건수:Q", title=None, axis=alt.Axis(tickMinStep=1, format="d")),
+                color=color,
+                tooltip=[alt.Tooltip("월:T", format="%Y-%m", title="월"),
+                         alt.Tooltip("평형라벨:N", title="평형"),
+                         alt.Tooltip("건수:Q", title="건수")])
+            .properties(height=80, width="container"))
+
+    chart = (alt.vconcat(line, bars)
+             .resolve_scale(color="shared", x="shared")
              .configure_view(strokeWidth=0)
              .configure_axis(gridColor="#f1f5f9", labelColor="#475569", domainColor="#cbd5e1")
              .configure_legend(orient="top", labelColor="#334155"))
     st.altair_chart(chart, width="stretch")
-    st.caption(f"{len(t)}건 · 점 색깔은 평형")
+    st.caption(f"총 {len(t)}건 · 선·점은 평형별 매매, 아래 막대는 월별 거래 건수")
 
 
 @st.dialog("알림")
@@ -404,7 +456,7 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
             st.session_state.last_pick = pick_key
             jibun = str(row["주소"]).split()[-1]
             title = row["아파트명"] or row["주소"]
-            show_trades(f"{title}  ·  {row['주소']}", row["구"], row["동"], jibun)
+            show_trades(title, row["주소"], row["구"], row["동"], jibun)
     st.download_button("⬇️ CSV로 내려받기",
                        detail.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
