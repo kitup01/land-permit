@@ -133,11 +133,15 @@ def apply_favorite(name):
 TRADE_CSV = Path(__file__).parent / "apt_trades.csv"
 
 
-@st.cache_data(ttl=600)
 def load_trades():
-    """아파트 실거래 (collect_trades.py로 생성). 없으면 None"""
+    """아파트 실거래 (collect_trades.py로 생성). 파일이 바뀔 때만 다시 읽음"""
     if not TRADE_CSV.exists():
         return None
+    return _load_trades_file(TRADE_CSV.stat().st_mtime)
+
+
+@st.cache_data(show_spinner=False)
+def _load_trades_file(_mtime):
     t = pd.read_csv(TRADE_CSV, dtype=str, encoding="utf-8-sig")
     t["계약일"] = pd.to_datetime(t["계약일"], errors="coerce")
     t["거래금액"] = pd.to_numeric(t["거래금액"], errors="coerce")
@@ -282,9 +286,15 @@ def show_trades(title, addr, gu, dong, jibun):
     st.caption(f"총 {len(t)}건 · 선·점은 평형별 매매, 아래 막대는 월별 거래 건수")
 
 
-@st.cache_data(ttl=3600)
 def trade_trends():
     """(구, 법정동, 지번) → ▲/▼/- : 같은 전용면적의 최근 거래가 직전 거래보다 오르면 ▲, 내리면 ▼"""
+    if not TRADE_CSV.exists():
+        return {}
+    return _trade_trends_file(TRADE_CSV.stat().st_mtime)
+
+
+@st.cache_data(show_spinner=False)
+def _trade_trends_file(_mtime):
     t = load_trades()
     if t is None:
         return {}
