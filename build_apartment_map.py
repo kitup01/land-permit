@@ -37,9 +37,17 @@ def main():
     apt["아파트명"] = apt.apply(pick_name, axis=1)
     apt = apt[apt["아파트명"] != ""]
     # 같은 지번에 단지가 여러 개면 이름을 / 로 이어 붙임
-    out = (apt.groupby(apt["주소"].str.strip(), as_index=False)["아파트명"]
-              .agg(lambda names: " / ".join(dict.fromkeys(names))))
-    out.columns = ["주소", "아파트명"]
+    apt["세대수"] = pd.to_numeric(apt["세대수"], errors="coerce")
+    apt["사용승인연도"] = pd.to_numeric(apt["사용승인일"].str[:4], errors="coerce")
+    key = apt["주소"].str.strip()
+    names = (apt.groupby(key, as_index=False)["아파트명"]
+                .agg(lambda names: " / ".join(dict.fromkeys(names))))
+    info = (apt.groupby(key)
+               .agg(세대수=("세대수", "sum"), 사용승인연도=("사용승인연도", "min"))
+               .reset_index())
+    out = names.merge(info, left_on="주소", right_on="주소")
+    out["세대수"] = out["세대수"].astype("Int64")
+    out["사용승인연도"] = out["사용승인연도"].astype("Int64")
     out.to_csv(OUT, index=False, encoding="utf-8-sig")
     print(f"아파트 지번 {len(out)}건 저장: {OUT}")
 
