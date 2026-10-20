@@ -537,9 +537,10 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
     view.insert(view.columns.get_loc("추세") + 1, "지도", view["주소"].map(
         lambda a: f"https://map.naver.com/p/search/{quote(a)}#지도보기"))
     # 매물 칸을 누르면 네이버부동산 검색 (단지명이 있으면 단지명, 없으면 주소로 검색)
+    # 검색어에 구·동을 붙여야 검색 결과가 잘 나옴 (예: "노원구 상계동 두산위브아파트")
     view.insert(view.columns.get_loc("지도") + 1, "매물", [
-        f"https://m.land.naver.com/search/result/{quote(name or addr)}#매물보기"
-        for name, addr in zip(detail["아파트명"], detail["주소"])])
+        f"https://m.land.naver.com/search/result/{quote(f'{gu} {dg} {name}' if name else addr)}#매물보기"
+        for gu, dg, name, addr in zip(detail["구"], detail["동"], detail["아파트명"], detail["주소"])])
     st.caption("👆 파란 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다 · 추세: ▲ 직전 거래보다 상승, ▼ 하락 (같은 지번·전용면적 기준)")
     # 아파트명은 링크처럼 파란 밑줄로 표시 (누르면 실거래 그래프)
     link_style = lambda v: "color:#2563eb;text-decoration:underline;font-weight:600" if v else ""
