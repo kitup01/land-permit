@@ -3,6 +3,7 @@
 실행: python build_apartment_map.py
 결과: apartment_names.csv (주소, 아파트명) — 앱이 상세 내역에 아파트명을 붙일 때 사용
 """
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -13,12 +14,20 @@ OUT = HERE / "apartment_names.csv"
 APARTMENT_CODE = "1"   # 단지종류 1 = 아파트 (2 = 연립·빌라, 3 = 기타로 확인)
 
 
+DONG_SUFFIX = re.compile(r"\s*\((?:[^()]*동)\)")   # 예: (A동), (101동), (나동), (방이동)
+
+
+def clean(name):
+    """동 표기 괄호 제거: '강오(A동)' → '강오', '성원하이츠(C동)' → '성원하이츠'"""
+    return DONG_SUFFIX.sub("", name).strip()
+
+
 def pick_name(row):
     """건축물대장 단지명을 우선, 없으면 도로명 단지명, 그다음 공시가격 단지명"""
     for col in ["단지명_건축물대장", "단지명_도로명주소", "단지명_공시가격"]:
         value = row.get(col)
         if isinstance(value, str) and value.strip():
-            return value.strip()
+            return clean(value)
     return ""
 
 

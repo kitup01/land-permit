@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 import collect  # 같은 폴더의 수집 코드 재사용 (사이트 요청 방식 동일)
 
@@ -319,11 +320,12 @@ with st.expander("🔍 상세 내역 보기"):
     apt_names = ("서울특별시 " + detail["주소"].str.strip()).map(apt_map).fillna("")
     detail.insert(detail.columns.get_loc("주소") + 1, "아파트명", apt_names)   # 주소 오른쪽에 표시
     view = detail.copy()
-    # 주소 칸 자체가 네이버지도 검색 링크 (글자는 주소 그대로 표시)
-    view["주소"] = view["주소"].map(lambda a: f"https://map.naver.com/v5/search/{a}")
+    # 지도 칸을 누르면 네이버지도에서 해당 주소 검색 (주소는 URL 인코딩해서 링크에 넣음)
+    view.insert(view.columns.get_loc("아파트명") + 1, "지도", view["주소"].map(
+        lambda a: f"https://map.naver.com/p/search/{quote(a)}#지도보기"))
     st.dataframe(
         view, width="stretch",
-        column_config={"주소": st.column_config.LinkColumn("주소", display_text=r"search/(.+)")})
+        column_config={"지도": st.column_config.LinkColumn("지도", display_text=r"#(.+)")})
     st.download_button("⬇️ CSV로 내려받기",
                        detail.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
