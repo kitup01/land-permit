@@ -138,6 +138,23 @@ def load_trades():
     return t.dropna(subset=["계약일", "거래금액", "평형"])
 
 
+def _pyeong_changed(key):
+    """평형 버튼 규칙: 전체 선택 → 나머지 해제 / 평형 선택 → 전체 해제 / 아무것도 없으면 전체"""
+    cur = list(st.session_state.get(key) or [])
+    prev = st.session_state.get(key + "_prev", ["전체"])
+    added = [x for x in cur if x not in prev]
+    if "전체" in added:
+        new = ["전체"]
+    elif "전체" in cur and added:
+        new = added
+    elif not cur:
+        new = ["전체"]
+    else:
+        new = cur
+    st.session_state[key] = new
+    st.session_state[key + "_prev"] = new
+
+
 @st.dialog("실거래 추이", width="small")
 def show_trades(title, addr, gu, dong, jibun):
     """아파트 실거래 팝업 (아실 스타일). 지번 기준 거래, 평형별 색·선택"""
@@ -157,13 +174,14 @@ def show_trades(title, addr, gu, dong, jibun):
     t["억"] = t["거래금액"] / 10000
     labels = [f"{p}평" for p in sorted(t["평형"].astype(int).unique())]
 
-    # 평형 선택 (아실의 '평수' 버튼 역할: 여러 개 선택 가능, 색은 평형별로 고정)
-    chosen = st.pills("평형", labels, selection_mode="multi", default=labels,
-                      key=f"pyeong_{gu}_{jibun}")
+    # 평형 선택: '전체'가 기본. 전체를 누르면 나머지는 풀리고, 평형을 누르면 전체는 풀림
+    pyeong_key = f"pyeong_{gu}_{jibun}"
+    chosen = st.pills("평형", ["전체"] + labels, selection_mode="multi", default=["전체"],
+                      key=pyeong_key, on_change=_pyeong_changed, args=(pyeong_key,))
     if not chosen:
-        st.info("평형을 하나 이상 선택해 주세요.")
-        return
-    t = t[t["평형라벨"].isin(chosen)]
+        chosen = ["전체"]
+    if "전체" not in chosen:
+        t = t[t["평형라벨"].isin(chosen)]
 
     # 기간 슬라이더 (기본: 최근 3년)
     dmin, dmax = t["계약일"].min().date(), t["계약일"].max().date()
