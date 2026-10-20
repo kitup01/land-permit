@@ -251,6 +251,29 @@ def show_trades(title, addr, gu, dong, jibun):
     st.caption(f"총 {len(t)}건 · 선·점은 평형별 매매, 아래 막대는 월별 거래 건수")
 
 
+@st.cache_data(ttl=3600)
+def trade_trends():
+    """(구, 법정동, 지번) → ▲/▼/- : 같은 전용면적의 최근 거래가 직전 거래보다 오르면 ▲, 내리면 ▼"""
+    t = load_trades()
+    if t is None:
+        return {}
+    t = t.assign(면적=t["전용면적"].round(0)).sort_values("계약일")
+    out = {}
+    for key, g in t.groupby(["구", "법정동", "지번"]):
+        last = g.iloc[-1]
+        same = g[g["면적"] == last["면적"]]
+        if len(same) < 2:
+            continue
+        prev = same.iloc[-2]
+        if last["거래금액"] > prev["거래금액"]:
+            out[key] = "▲"
+        elif last["거래금액"] < prev["거래금액"]:
+            out[key] = "▼"
+        else:
+            out[key] = "-"
+    return out
+
+
 @st.dialog("알림")
 def need_gu_popup():
     st.write("**자치구를 선택해주세요.**")
@@ -464,18 +487,24 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
     apt_map = load_apartments()
     apt_names = ("서울특별시 " + detail["주소"].str.strip()).map(apt_map).fillna("")
     detail.insert(detail.columns.get_loc("주소") + 1, "아파트명", apt_names)   # 주소 오른쪽에 표시
+    trend = trade_trends()
+    detail.insert(detail.columns.get_loc("아파트명") + 1, "추세", [
+        trend.get((g, d, str(a).split()[-1]), "") for g, d, a in zip(detail["구"], detail["동"], detail["주소"])])
     view = detail.copy()
     # 지도 칸을 누르면 네이버지도에서 해당 주소 검색 (주소는 URL 인코딩해서 링크에 넣음)
-    view.insert(view.columns.get_loc("아파트명") + 1, "지도", view["주소"].map(
+    view.insert(view.columns.get_loc("추세") + 1, "지도", view["주소"].map(
         lambda a: f"https://map.naver.com/p/search/{quote(a)}#지도보기"))
-    st.caption("👆 파란 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다")
+    st.caption("👆 파란 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다 · 추세: ▲ 직전 거래보다 상승, ▼ 하락 (같은 지번·전용면적 기준)")
     # 아파트명은 링크처럼 파란 밑줄로 표시 (누르면 실거래 그래프)
     link_style = lambda v: "color:#2563eb;text-decoration:underline;font-weight:600" if v else ""
-    styled = view.style.map(link_style, subset=["아파트명"]) if hasattr(view.style, "map")         else view.style.applymap(link_style, subset=["아파트명"])
+    trend_style = lambda v: ("color:#dc2626;font-weight:800" if v == "▲"
+                             else "color:#2563eb;font-weight:800" if v == "▼" else "")
+    styled = view.style.map(link_style, subset=["아파트명"]).map(trend_style, subset=["추세"])
     event = st.dataframe(
         styled, width="stretch", on_select="rerun", selection_mode="single-cell",
         key="detail_table",
-        column_config={"지도": st.column_config.LinkColumn("지도", display_text=r"#(.+)")})
+        column_config={"지도": st.column_config.LinkColumn("지도", display_text=r"#(.+)"),
+                       "추세": st.column_config.TextColumn("추세", width="small")})
     cells = event.selection.cells if event and event.selection else []
     if cells:
         cell = cells[0]
