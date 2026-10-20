@@ -117,7 +117,7 @@ def save_gu(gu_frame, gu, months):
         df = pd.concat([old[~drop], new], ignore_index=True)
     else:
         df = new
-    df = df.drop_duplicates(subset=["단지코드", "계약일", "층", "전용면적", "거래금액", "지번"], keep="last")
+    # 같은 조건의 거래가 실제로 여러 건 있을 수 있으므로 중복 제거는 하지 않음 (달 단위로 통째로 교체)
     df.sort_values(["구", "계약일"], ascending=[True, False]).to_csv(OUT, index=False, encoding="utf-8-sig")
     return len(df)
 

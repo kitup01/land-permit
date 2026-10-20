@@ -167,7 +167,7 @@ def show_trades(title, addr, gu, dong, jibun):
 
     # 기간 슬라이더 (기본: 최근 3년)
     dmin, dmax = t["계약일"].min().date(), t["계약일"].max().date()
-    default_start = max(dmin, dmax - timedelta(days=365 * 3))
+    default_start = dmin   # 기본: 2006년부터 전체
     span = st.slider("기간", min_value=dmin, max_value=dmax, value=(default_start, dmax),
                      key=f"range_{gu}_{jibun}")
     t = t[(t["계약일"] >= pd.Timestamp(span[0])) & (t["계약일"] <= pd.Timestamp(span[1]))]
@@ -188,7 +188,7 @@ def show_trades(title, addr, gu, dong, jibun):
 
     # 위: 평형별 매매 선 + 점
     line = (alt.Chart(t)
-            .mark_line(point=alt.OverlayMarkDef(size=45, filled=True), strokeWidth=1.6, opacity=0.9)
+            .mark_line(point=alt.OverlayMarkDef(size=18, filled=True), strokeWidth=1.2, opacity=0.9)
             .encode(
                 x=alt.X("계약일:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
                 y=alt.Y("억:Q", title=None, scale=alt.Scale(zero=False), axis=y_axis),
@@ -442,9 +442,12 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
     # 지도 칸을 누르면 네이버지도에서 해당 주소 검색 (주소는 URL 인코딩해서 링크에 넣음)
     view.insert(view.columns.get_loc("아파트명") + 1, "지도", view["주소"].map(
         lambda a: f"https://map.naver.com/p/search/{quote(a)}#지도보기"))
-    st.caption("👆 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다")
+    st.caption("👆 파란 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다")
+    # 아파트명은 링크처럼 파란 밑줄로 표시 (누르면 실거래 그래프)
+    link_style = lambda v: "color:#2563eb;text-decoration:underline;font-weight:600" if v else ""
+    styled = view.style.map(link_style, subset=["아파트명"]) if hasattr(view.style, "map")         else view.style.applymap(link_style, subset=["아파트명"])
     event = st.dataframe(
-        view, width="stretch", on_select="rerun", selection_mode="single-cell",
+        styled, width="stretch", on_select="rerun", selection_mode="single-cell",
         key="detail_table",
         column_config={"지도": st.column_config.LinkColumn("지도", display_text=r"#(.+)")})
     cells = event.selection.cells if event and event.selection else []
