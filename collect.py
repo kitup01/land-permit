@@ -114,20 +114,19 @@ def replace_window(gu, begin, end, rows):
 
 
 def run_daily():
-    """매일 실행용: 최근 60일을 다시 받아 누적"""
+    """매일 실행용: 최근 60일을 구별로 사이트 값으로 교체 (취소·정정 건도 반영)"""
     end = date.today()
     begin = end - timedelta(days=DAYS)
     b, e = begin.strftime("%Y%m%d"), end.strftime("%Y%m%d")
-    rows = []
     for sgg_cd, gu in get_districts():
         items = fetch_checked(sgg_cd, b, e)
         if items is None:
             print(f"  {gu}: 실패 (기존 데이터 유지)")
             continue
-        rows += to_rows(items, gu)
-        print(f"  {gu}: {len(items)}건")
+        total = replace_window(gu, str(begin), str(end), to_rows(items, gu))
+        print(f"  {gu}: 사이트 {len(items)}건 반영 (누적 {total}건)")
         time.sleep(REQ_PAUSE)
-    print(f"총 {merge_new(rows)}건 저장: {CSV}")
+    print(f"완료: {CSV}")
 
 
 def run_resync(start):
