@@ -112,6 +112,15 @@ def kpi(icon, label, value, unit="", sub="", sub_class=""):
             f'<div class="kpi-sub {sub_class}">{sub}</div></div>')
 
 
+FAVORITES = ["관악구", "동대문구", "노원구", "강동구"]
+
+
+def apply_favorite(name):
+    """즐겨찾기 버튼: 자치구를 바꾸고 지금 설정된 기간으로 바로 조회 (콜백이라 위젯 값 변경이 가능)"""
+    st.session_state.gu_sel = name
+    st.session_state.query = (name, "전체", st.session_state.from_date, st.session_state.to_date)
+
+
 @st.dialog("알림")
 def need_gu_popup():
     st.write("**자치구를 선택해주세요.**")
@@ -165,6 +174,12 @@ with st.container(border=True):
             st.toast("시작일이 종료일보다 늦습니다.", icon="⚠️")
         else:
             st.session_state.query = (gu_sel, dong_sel, from_sel, to_sel)
+
+    st.caption("⭐ 즐겨찾기 · 누르면 위 기간으로 바로 조회됩니다")
+    fav_cols = st.columns(4)
+    for col, name in zip(fav_cols, FAVORITES):
+        col.button(f"📌 {name}", key=f"fav_{name}", on_click=apply_favorite,
+                   args=(name,), width="stretch")
 
 if st.session_state.query is None:
     st.markdown('<div class="empty">🔎<br><br>자치구와 기간을 고른 뒤 <b>조회하기</b>를 누르면 결과가 나옵니다.</div>',
@@ -314,7 +329,7 @@ with st.container(border=True):
 st.write("")
 
 # ── 상세 내역 / 다운로드 ───────────────────────────
-with st.expander("🔍 상세 내역 보기"):
+with st.expander("🔍 상세 내역 보기", expanded=True):
     detail = cur.sort_values("허가일자", ascending=False).reset_index(drop=True)
     apt_map = load_apartments()
     apt_names = ("서울특별시 " + detail["주소"].str.strip()).map(apt_map).fillna("")
