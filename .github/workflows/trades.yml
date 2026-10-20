@@ -1,0 +1,33 @@
+name: trades
+
+on:
+  schedule:
+    - cron: "0 19 * * *"    # 매일 UTC 19:00 = 한국시간 새벽 04:00
+  workflow_dispatch:         # 수동 실행 버튼도 사용 가능
+
+permissions:
+  contents: write
+
+jobs:
+  trades:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pandas requests
+
+      # 최근 2개월(신고 지연분 포함)을 다시 받아 해당 달만 갱신
+      - run: python collect_trades.py --gu 동대문구,관악구,강동구,노원구 --recent 2
+        env:
+          MOLIT_KEY: ${{ secrets.MOLIT_KEY }}
+
+      - name: 변경된 데이터 저장
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add apt_trades.csv
+          git diff --cached --quiet || (git commit -m "update trades $(date +%F)" && git push)

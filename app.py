@@ -121,6 +121,58 @@ def apply_favorite(name):
     st.session_state.query = (name, "전체", st.session_state.from_date, st.session_state.to_date)
 
 
+TRADE_CSV = Path(__file__).parent / "apt_trades.csv"
+
+
+@st.cache_data(ttl=600)
+def load_trades():
+    """아파트 실거래 (collect_trades.py로 생성). 없으면 None"""
+    if not TRADE_CSV.exists():
+        return None
+    t = pd.read_csv(TRADE_CSV, dtype=str, encoding="utf-8-sig")
+    t["계약일"] = pd.to_datetime(t["계약일"], errors="coerce")
+    t["거래금액"] = pd.to_numeric(t["거래금액"], errors="coerce")
+    t["전용면적"] = pd.to_numeric(t["전용면적"], errors="coerce")
+    t["평형"] = (t["전용면적"] / 3.3058).round(0)   # ㎡ → 평 (전용 기준)
+    t["층"] = pd.to_numeric(t["층"], errors="coerce")
+    return t.dropna(subset=["계약일", "거래금액", "평형"])
+
+
+@st.dialog("실거래 추이", width="large")
+def show_trades(title, gu, dong, jibun):
+    """아파트 실거래 그래프 (평형별 색). 지번 기준으로 거래를 모음"""
+    st.markdown(f"**{title}**")
+    trades = load_trades()
+    if trades is None:
+        st.info("실거래 데이터가 아직 없습니다. collect_trades.py를 실행해 주세요.")
+        return
+    t = trades[(trades["구"] == gu) & (trades["법정동"] == dong) & (trades["지번"] == jibun)].copy()
+    if t.empty:
+        st.info("이 지번의 실거래 자료가 없습니다.")
+        return
+    t["평형라벨"] = t["평형"].astype(int).astype(str) + "평"
+    order = [f"{p}평" for p in sorted(t["평형"].astype(int).unique())]
+    chart = (alt.Chart(t)
+             .mark_circle(size=90, opacity=0.8)
+             .encode(
+                 x=alt.X("계약일:T", title=None, axis=alt.Axis(format="%y.%m", labelAngle=-45)),
+                 y=alt.Y("거래금액:Q", title="거래금액 (만원)", scale=alt.Scale(zero=False),
+                         axis=alt.Axis(format=",.0f")),
+                 color=alt.Color("평형라벨:N", title="평형", sort=order,
+                                 scale=alt.Scale(scheme="tableau10")),
+                 tooltip=[alt.Tooltip("계약일:T", format="%Y-%m-%d", title="계약일"),
+                          alt.Tooltip("단지명:N", title="단지"),
+                          alt.Tooltip("평형라벨:N", title="평형"),
+                          alt.Tooltip("층:Q", title="층"),
+                          alt.Tooltip("거래금액:Q", title="거래금액(만원)", format=",.0f")])
+             .properties(width="container", height=300)
+             .configure_view(strokeWidth=0)
+             .configure_axis(gridColor="#f1f5f9", labelColor="#475569", domainColor="#cbd5e1")
+             .configure_legend(orient="top", labelColor="#334155"))
+    st.altair_chart(chart, width="stretch")
+    st.caption(f"{len(t)}건 · 점 색깔은 평형")
+
+
 @st.dialog("알림")
 def need_gu_popup():
     st.write("**자치구를 선택해주세요.**")
@@ -338,9 +390,21 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
     # 지도 칸을 누르면 네이버지도에서 해당 주소 검색 (주소는 URL 인코딩해서 링크에 넣음)
     view.insert(view.columns.get_loc("아파트명") + 1, "지도", view["주소"].map(
         lambda a: f"https://map.naver.com/p/search/{quote(a)}#지도보기"))
-    st.dataframe(
-        view, width="stretch",
+    st.caption("👆 행을 누르면 그 지번의 아파트 실거래 그래프가 뜹니다")
+    event = st.dataframe(
+        view, width="stretch", on_select="rerun", selection_mode="single-row",
+        key="detail_table",
         column_config={"지도": st.column_config.LinkColumn("지도", display_text=r"#(.+)")})
+    picked = event.selection.rows if event and event.selection else []
+    if picked:
+        row = detail.iloc[picked[0]]
+        pick_key = row["주소"]
+        # 같은 행으로 다른 조건만 바뀌어 다시 실행될 때 창이 반복해서 뜨지 않도록 한 번만 연다
+        if st.session_state.get("last_pick") != pick_key:
+            st.session_state.last_pick = pick_key
+            jibun = str(row["주소"]).split()[-1]
+            title = row["아파트명"] or row["주소"]
+            show_trades(f"{title}  ·  {row['주소']}", row["구"], row["동"], jibun)
     st.download_button("⬇️ CSV로 내려받기",
                        detail.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
