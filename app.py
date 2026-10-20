@@ -188,7 +188,7 @@ def show_trades(title, addr, gu, dong, jibun):
 
     # 위: 평형별 매매 선 + 점
     line = (alt.Chart(t)
-            .mark_line(point=alt.OverlayMarkDef(size=18, filled=True), strokeWidth=1.2, opacity=0.9)
+            .mark_line(point=alt.OverlayMarkDef(size=14, filled=True), strokeWidth=1.2, opacity=0.9)
             .encode(
                 x=alt.X("계약일:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
                 y=alt.Y("억:Q", title=None, scale=alt.Scale(zero=False), axis=y_axis),
@@ -206,7 +206,7 @@ def show_trades(title, addr, gu, dong, jibun):
                 .groupby(["월", "평형라벨"], as_index=False).size()
                 .rename(columns={"size": "건수"}))
     bars = (alt.Chart(monthly)
-            .mark_bar()
+            .mark_bar(size=6, opacity=0.85)
             .encode(
                 x=alt.X("월:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
                 y=alt.Y("건수:Q", title=None, axis=alt.Axis(tickMinStep=1, format="d")),
@@ -214,7 +214,7 @@ def show_trades(title, addr, gu, dong, jibun):
                 tooltip=[alt.Tooltip("월:T", format="%Y-%m", title="월"),
                          alt.Tooltip("평형라벨:N", title="평형"),
                          alt.Tooltip("건수:Q", title="건수")])
-            .properties(height=70, width="container"))
+            .properties(height=52, width="container"))
 
     chart = (alt.vconcat(line, bars)
              .resolve_scale(color="shared", x="shared")
