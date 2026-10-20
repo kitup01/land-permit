@@ -138,7 +138,7 @@ def load_trades():
     return t.dropna(subset=["계약일", "거래금액", "평형"])
 
 
-@st.dialog("실거래 추이", width="large")
+@st.dialog("실거래 추이", width="small")
 def show_trades(title, addr, gu, dong, jibun):
     """아파트 실거래 팝업 (아실 스타일). 지번 기준 거래, 평형별 색·선택"""
     st.markdown(
@@ -199,7 +199,7 @@ def show_trades(title, addr, gu, dong, jibun):
                          alt.Tooltip("평형라벨:N", title="평형"),
                          alt.Tooltip("층:Q", title="층"),
                          alt.Tooltip("거래금액:Q", title="거래금액(만원)", format=",.0f")])
-            .properties(height=280, width="container"))
+            .properties(height=240, width="container"))
 
     # 아래: 월별 거래 건수 막대 (평형별 색)
     monthly = (t.assign(월=t["계약일"].dt.to_period("M").dt.to_timestamp())
@@ -214,7 +214,7 @@ def show_trades(title, addr, gu, dong, jibun):
                 tooltip=[alt.Tooltip("월:T", format="%Y-%m", title="월"),
                          alt.Tooltip("평형라벨:N", title="평형"),
                          alt.Tooltip("건수:Q", title="건수")])
-            .properties(height=80, width="container"))
+            .properties(height=70, width="container"))
 
     chart = (alt.vconcat(line, bars)
              .resolve_scale(color="shared", x="shared")
@@ -442,21 +442,27 @@ with st.expander("🔍 상세 내역 보기", expanded=True):
     # 지도 칸을 누르면 네이버지도에서 해당 주소 검색 (주소는 URL 인코딩해서 링크에 넣음)
     view.insert(view.columns.get_loc("아파트명") + 1, "지도", view["주소"].map(
         lambda a: f"https://map.naver.com/p/search/{quote(a)}#지도보기"))
-    st.caption("👆 행을 누르면 그 지번의 아파트 실거래 그래프가 뜹니다")
+    st.caption("👆 아파트명을 누르면 그 단지의 실거래 그래프가 뜹니다")
     event = st.dataframe(
-        view, width="stretch", on_select="rerun", selection_mode="single-row",
+        view, width="stretch", on_select="rerun", selection_mode="single-cell",
         key="detail_table",
         column_config={"지도": st.column_config.LinkColumn("지도", display_text=r"#(.+)")})
-    picked = event.selection.rows if event and event.selection else []
-    if picked:
-        row = detail.iloc[picked[0]]
-        pick_key = row["주소"]
-        # 같은 행으로 다른 조건만 바뀌어 다시 실행될 때 창이 반복해서 뜨지 않도록 한 번만 연다
-        if st.session_state.get("last_pick") != pick_key:
-            st.session_state.last_pick = pick_key
-            jibun = str(row["주소"]).split()[-1]
-            title = row["아파트명"] or row["주소"]
-            show_trades(title, row["주소"], row["구"], row["동"], jibun)
+    cells = event.selection.cells if event and event.selection else []
+    if cells:
+        cell = cells[0]
+        r = cell["row"] if isinstance(cell, dict) else cell[0]
+        col = cell["column"] if isinstance(cell, dict) else cell[1]
+        if col == "아파트명":
+            row = detail.iloc[r]
+            pick_key = f"{r}-{row['주소']}"
+            # 같은 칸으로 다른 조건만 바뀌어 다시 실행될 때 팝업이 반복해서 뜨지 않도록 한 번만 연다
+            if st.session_state.get("last_pick") != pick_key:
+                st.session_state.last_pick = pick_key
+                if row["아파트명"]:
+                    jibun = str(row["주소"]).split()[-1]
+                    show_trades(row["아파트명"], row["주소"], row["구"], row["동"], jibun)
+                else:
+                    st.toast("아파트가 아닌 지번이라 실거래 그래프가 없습니다.", icon="🏠")
     st.download_button("⬇️ CSV로 내려받기",
                        detail.to_csv(index=False).encode("utf-8-sig"),
                        "허가내역.csv", "text/csv")
