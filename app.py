@@ -202,16 +202,20 @@ def show_trades(title, addr, gu, dong, jibun):
             .properties(height=240, width="container"))
 
     # 아래: 월별 거래 건수 막대 (평형별 색)
-    monthly = (t.assign(월=t["계약일"].dt.to_period("M").dt.to_timestamp())
-                .groupby(["월", "평형라벨"], as_index=False).size()
-                .rename(columns={"size": "건수"}))
-    bars = (alt.Chart(monthly)
-            .mark_bar(size=6, opacity=0.85)
+    # 기간이 길면(3년 초과) 막대를 연도별로 묶어서 번지지 않게 함
+    yearly = (t["계약일"].max() - t["계약일"].min()).days > 365 * 3
+    unit = "Y" if yearly else "M"
+    bucket = "연도" if yearly else "월"
+    counts = (t.assign(묶음=t["계약일"].dt.to_period(unit).dt.to_timestamp())
+               .groupby(["묶음", "평형라벨"], as_index=False).size()
+               .rename(columns={"size": "건수"}))
+    bars = (alt.Chart(counts)
+            .mark_bar(opacity=0.85, cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
             .encode(
-                x=alt.X("월:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
+                x=alt.X("묶음:T", title=None, axis=alt.Axis(format="%y년", labelAngle=0)),
                 y=alt.Y("건수:Q", title=None, axis=alt.Axis(tickMinStep=1, format="d")),
                 color=color,
-                tooltip=[alt.Tooltip("월:T", format="%Y-%m", title="월"),
+                tooltip=[alt.Tooltip("묶음:T", format="%Y년" if yearly else "%Y-%m", title=bucket),
                          alt.Tooltip("평형라벨:N", title="평형"),
                          alt.Tooltip("건수:Q", title="건수")])
             .properties(height=52, width="container"))
