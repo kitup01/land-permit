@@ -170,9 +170,13 @@ def show_trades(title, addr, gu, dong, jibun):
     if t.empty:
         st.info("이 지번의 실거래 자료가 없습니다.")
         return
-    t["평형라벨"] = t["평형"].astype(int).astype(str) + "평"
+    t["평형"] = t["평형"].astype(int)
     t["억"] = t["거래금액"] / 10000
-    labels = [f"{p}평" for p in sorted(t["평형"].astype(int).unique())]
+    # 평형 버튼에는 전용면적(㎡)을 함께 표시 (사이트 자료는 전용면적 기준이라 아실 평형과 다를 수 있음)
+    area_by = t.groupby("평형")["전용면적"].agg(lambda s: int(round(s.mode().iloc[0])))
+    t["평형라벨"] = [f"{p}평 ({area_by[p]}㎡)" for p in t["평형"]]
+    labels = [f"{p}평 ({area_by[p]}㎡)" for p in sorted(area_by.index)]
+    t_all = t.copy()   # 기간 슬라이더는 평형 선택과 무관하게 단지 전체 기간 기준
 
     # 평형 선택: '전체'가 기본. 전체를 누르면 나머지는 풀리고, 평형을 누르면 전체는 풀림
     pyeong_key = f"pyeong_{gu}_{jibun}"
@@ -184,7 +188,7 @@ def show_trades(title, addr, gu, dong, jibun):
         t = t[t["평형라벨"].isin(chosen)]
 
     # 기간 슬라이더 (기본: 최근 3년)
-    dmin, dmax = t["계약일"].min().date(), t["계약일"].max().date()
+    dmin, dmax = t_all["계약일"].min().date(), t_all["계약일"].max().date()
     default_start = dmin   # 기본: 2006년부터 전체
     span = st.slider("기간", min_value=dmin, max_value=dmax, value=(default_start, dmax),
                      key=f"range_{gu}_{jibun}")
