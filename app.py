@@ -185,10 +185,10 @@ def show_trades(title, addr, gu, dong, jibun):
     info = load_apartment_info().get("서울특별시 " + addr)   # (세대 수, 사용승인 연도) 또는 None
 
     def mini(label, value, sub=""):
-        return (f'<div style="border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px;background:#fff">'
-                f'<div style="font-size:.72rem;color:#64748b;font-weight:600">{label}</div>'
-                f'<div style="font-size:1.02rem;font-weight:800;color:#0f172a;margin-top:2px">{value}</div>'
-                f'<div style="font-size:.7rem;color:#94a3b8">{sub}</div></div>')
+        return (f'<div style="border:1px solid #e2e8f0;border-radius:10px;padding:6px 8px;background:#fff">'
+                f'<div style="font-size:.68rem;color:#64748b;font-weight:600">{label}</div>'
+                f'<div style="font-size:.95rem;font-weight:800;color:#0f172a;margin-top:1px">{value}</div>'
+                f'<div style="font-size:.66rem;color:#94a3b8">{sub}</div></div>')
 
     households = info[0] if info is not None and pd.notna(info[0]) else ""
     year = info[1] if info is not None and pd.notna(info[1]) else ""
@@ -198,9 +198,6 @@ def show_trades(title, addr, gu, dong, jibun):
     c_a, c_b = st.columns(2)
     c_a.markdown(mini("사용승인", year_txt, age_txt), unsafe_allow_html=True)
     c_b.markdown(mini("세대 수", hh_txt), unsafe_allow_html=True)
-    c_c, c_d = st.columns(2)
-    c_c.markdown(mini("주차 대수", "-", "건축물대장 연동 필요"), unsafe_allow_html=True)
-    c_d.markdown(mini("용적률", "-", "건축물대장 연동 필요"), unsafe_allow_html=True)
     st.write("")
 
     trades = load_trades()
@@ -220,6 +217,11 @@ def show_trades(title, addr, gu, dong, jibun):
     t_all = t.copy()   # 기간 슬라이더는 평형 선택과 무관하게 단지 전체 기간 기준
 
     # 평형 선택: '전체'가 기본. 전체를 누르면 나머지는 풀리고, 평형을 누르면 전체는 풀림
+    # 모바일에서 평형 버튼이 잘리지 않도록 줄바꿈 허용
+    st.markdown("""<style>
+        div[data-testid="stPills"], div[data-testid="stPills"] div {
+            flex-wrap: wrap !important; overflow: visible !important; white-space: normal !important; }
+    </style>""", unsafe_allow_html=True)
     pyeong_key = f"pyeong_{gu}_{jibun}"
     chosen = st.pills("평형", ["전체"] + labels, selection_mode="multi", default=["전체"],
                       key=pyeong_key, on_change=_pyeong_changed, args=(pyeong_key,))
@@ -262,7 +264,7 @@ def show_trades(title, addr, gu, dong, jibun):
                          alt.Tooltip("평형라벨:N", title="평형"),
                          alt.Tooltip("층:Q", title="층"),
                          alt.Tooltip("거래금액:Q", title="거래금액(만원)", format=",.0f")])
-            .properties(height=240, width="container"))
+            .properties(height=190, width="container"))
 
     # 아래: 월별 거래 건수 막대 (평형별 색)
     # 기간이 길면(3년 초과) 막대를 연도별로 묶어서 번지지 않게 함
