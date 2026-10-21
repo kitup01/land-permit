@@ -248,7 +248,10 @@ def show_trades(title, addr, gu, dong, jibun):
         f'<div style="font-size:1.15rem;font-weight:800;color:#2563eb">매매 {recent["거래금액"].mean():,.0f} / {len(recent)}건</div>',
         unsafe_allow_html=True)
 
-    color = alt.Color("평형라벨:N", title=None, sort=labels, scale=alt.Scale(scheme="tableau10"))
+    # 범례는 짧게 (예: 18평) — 버튼에는 전용면적까지 표시
+    t["범례"] = [f"{p}평" for p in t["평형"]]
+    short_labels = [f"{p}평" for p in sorted(area_by.index)]
+    color = alt.Color("범례:N", title=None, sort=short_labels, scale=alt.Scale(scheme="tableau10"))
     y_axis = alt.Axis(labelExpr="format(datum.value, '.0f') + '억'", titleColor="#475569")
 
     # 위: 평형별 매매 선 + 점
