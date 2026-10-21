@@ -195,10 +195,10 @@ def show_trades(title, addr, gu, dong, jibun):
     year_txt = f"{int(float(year))}년" if year else "-"
     age_txt = f"연식 {date.today().year - int(float(year))}년" if year else ""
     hh_txt = f"{int(float(households)):,}세대" if households else "-"
-    c_a, c_b = st.columns(2)
-    c_a.markdown(mini("사용승인", year_txt, age_txt), unsafe_allow_html=True)
-    c_b.markdown(mini("세대 수", hh_txt), unsafe_allow_html=True)
-    st.write("")
+    line_parts = [f"사용승인 {year_txt}" + (f" ({age_txt})" if age_txt else ""), f"세대수 {hh_txt}"]
+    st.markdown(f'<div style="font-size:.8rem;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;'
+                f'border-radius:10px;padding:6px 10px;margin:.2rem 0 .6rem">{" &nbsp;·&nbsp; ".join(line_parts)}</div>',
+                unsafe_allow_html=True)
 
     trades = load_trades()
     if trades is None:
